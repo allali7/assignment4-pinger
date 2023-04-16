@@ -241,5 +241,5 @@ def ping(host, timeout=1):
 if __name__ == '__main__':
     #ping("127.0.0.1")
     ping("google.com")
-    ping("nyu.edu")
+
 
