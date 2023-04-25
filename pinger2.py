@@ -74,6 +74,22 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
         """
     timeLeft = timeout  # Set time left to the input timeout value
 
+
+
+# howLongInSelect = (time.time() - startedSelect) calculates the time elapsed during
+# the execution of the select.select() function. The current time is obtained using time.time()
+# before the select.select() function is called and stored in the startedSelect variable. After the
+#  function returns, the current time is obtained again using time.time() and subtracted from the
+#  startedSelect value to find the elapsed time (howLongInSelect). This elapsed time is used to
+#  update the timeLeft value in the subsequent lines of code (not shown in the provided snippet).
+    #whatReady = select.select([mySocket], [], [], timeLeft): The select.select() function is called
+    # with four arguments: a list containing the socket to monitor for incoming data (mySocket),
+    # two empty lists (indicating no interest in monitoring any sockets for writing or error events),
+    # and the timeLeft value as the timeout. The function blocks and waits for an event
+    # (incoming data on the socket) or the specified timeout to expire. The function returns a tuple
+    # of three lists corresponding to the sockets that are ready for reading, writing, and error events,
+    # respectively.
+
     # Loop until there's a response or the timeout is reached
     while 1:
         startedSelect = time.time()  # Record the start time of the select function
@@ -85,10 +101,19 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
             return "Request timed out."
 
         timeReceived = time.time()  # Record the time the response was received
+        #receives data from the socket using the recvfrom() method. It takes an argument
+        # (1024 in this case) specifying the maximum amount of data to be received at once.
+        # The method returns a tuple containing the received data (recPacket) and the address
+        # of the socket sending the data (addr).
         recPacket, addr = mySocket.recvfrom(1024)  # Receive the ICMP packet and source address
 
         # Extract the ICMP header from the IP packet
+        #extracts the ICMP header from the received packet by slicing the packet from
+        # byte 20 to byte 27 (28 is exclusive). This is because the IP header is typically
+        # 20 bytes long, and the ICMP header immediately follows the IP header.
         icmp_header = recPacket[20:28]  # Extract the ICMP header from the received packet
+        #extract the fields from the ICMP header. The function takes two arguments:
+        # a format string and the data to be unpacked.
         icmp_type, icmp_code, icmp_checksum, icmp_id, icmp_seq = struct.unpack("bbHHh",
                                                                                icmp_header)  # Unpack the ICMP header into its components
 
@@ -100,8 +125,8 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
         # Fill in start##################################################################
         # Fill in start
         # Extract payload and calculate RTT and TTL
-        payload = struct.unpack("d", recPacket[28:])[0]  # Extract the payload (timestamp) from the packet
-        rtt = (timeReceived - payload) * 1000  # Calculate Round Trip Time (RTT) in milliseconds
+        payload = struct.unpack("d", recPacket[28:])[0]  # Extract the payload (timestamp) from the packet, we packed the timestamp in dooneping
+        rtt = (timeReceived - payload) * 1000  # Calculate Round Trip Time (RTT) in milliseconds, payload has time that was sent in sendoneping
         ttl = struct.unpack("B", recPacket[8:9])[0]  # Extract Time To Live (TTL) value from the packet
 
         # Return the ping result and a dictionary containing the packet statistics
@@ -167,7 +192,7 @@ def sendOnePing(mySocket, destAddr, ID):
 # - `"d"`: This is the format specifier. It represents a double-precision floating-point number (8 bytes) in the packed binary string.
 #
 # - `time.time()`: This function call returns the current time in seconds since the epoch (January 1, 1970) as a floating-point number.
-# 
+#
 # The result is a packed binary string that represents the current timestamp. This timestamp is used as the payload in the ICMP packet, which is later used to calculate the Round-Trip Time (RTT) when the corresponding ICMP response is received.
 
     data = struct.pack("d", time.time())  # Pack the current time as binary data for the ICMP packet
