@@ -70,41 +70,18 @@ def receiveOnePing(mySocket, ID, timeout, destAddr):
 
         #extract the ICMP header from the IP packet
         # Fill in start##################################################################
+        # Fill in start
+        icmp_header = recPacket[20:28]
+        icmp_type, icmp_code, icmp_checksum, icmp_id, icmp_seq = struct.unpack("bbHHh", icmp_header)
+        if icmp_type != 0 or icmp_id != ID:
+            continue
 
-        # Fetch the ICMP header from the IP packet
+        payload = struct.unpack("d", recPacket[28:])[0]
+        rtt = (timeReceived - payload) * 1000
+        ttl = struct.unpack("B", recPacket[8:9])[0]
 
-        #here we extract the ICMP header from the recieved IP packet('recPacket')
-        #the ip header is 20 bytes,
-        #then comes the ICMP header is 8 bytes
-        # ICMp header includes  tpe, code, checksum, id and sequence (160 - 191 bits)
-        icmpHeader = recPacket[20:28] #extract the ICMP header from 20 to 28
-
-
-
-
-        #struct.uppack function unpacks the ICMP header's binary data
-        #the data string bbHHh describes the data structure:
-        # b:signed char 1byte
-        #H: unsigned short(2 bytes)
-        #h: short (2bytes)
-        #so....
-        #b = type
-        #b = code
-        #B = checksum
-        #B = ID
-        #h = sequence
-        type, code, checksum, packetID, sequence = struct.unpack("bbHHh", icmpHeader)
-        timeLeft = timeLeft - howLongInSelect
-        if timeLeft <= 0:
-            return "Request timed out."
-        if type == 0 and packetID==ID:
-            byteSize = len(recPacket)
-            timeSent = struct.unpack("d", recPacket[28:28 + struct.calcsize("d")])[0]
-            delay = timeReceived - timeSent
-            ttl = struct.unpack("c", recPacket[8:9])[0]
-            return delay, (byteSize, delay, ttl)
-        else:
-            return("Request timed out.",['0', '0.0','0','0.0'])
+        return f"Reply from {destAddr}: bytes={len(recPacket)} time={rtt:.2f}ms TTL={ttl}", {"bytes": len(recPacket), "rtt": rtt, "ttl": ttl}
+        # Fill in end
 
 
         # Fill in end####################################################################
@@ -183,63 +160,62 @@ def doOnePing(destAddr, timeout):
 #we count how many times the server respnded and how many times it didn't (packet_loss and packet_recv)
 #we calculate the shortest, average, longest and how spread out the responses were
 def ping(host, timeout=1):
-    # timeout=1 means: If one second goes by without a reply from the server,   
-    # the client assumes that either the client's ping or the server's pong is lost
     dest = gethostbyname(host)
     print("\nPinging " + dest + " using Python:")
     print("")
-    
-    response = pd.DataFrame(columns=['bytes','rtt','ttl']) #This creates an empty dataframe with 3 headers with the column specific names declared
 
-    #Send ping requests to a server separated by approximately one second
-    #Add something here to collect the delays of each ping in a list so you can calculate vars after your ping
-    delays = []
-    for i in range(0,4): #Four pings will be sent (loop runs for i=0, 1, 2, 3)
-
-        delay, statistics = doOnePing(dest, timeout) #what is stored into delay and statistics?
-        # recBytes, rtt, ttl = statistics
-        # delays.append(delay)
-        # response = response.append({'bytes': recBytes, 'rtt': delay, 'ttl': ttl}, ignore_index=True)
-        # print("Reply from {}: bytes={} time={:.2f}ms TTL={}".format(dest, recBytes, delay * 1000, ord(ttl)))
-
-        # if statistics:
-        recBytes, rtt, ttl = statistics
-        delays.append(delay)
-        response = response.append({'bytes': recBytes, 'rtt': delay, 'ttl': ttl}, ignore_index=True)
-        print("Reply from {}: bytes={} time={:.2f}ms TTL={}".format(dest, recBytes, delay * 1000, ord(ttl)))
-        # elif isinstance(delay, str):
-        #     response = response.append({'bytes': 0, 'rtt': 0, 'ttl': 0}, ignore_index=True)
-        #     print("Request timed out.")
-
-        #response = #store your bytes, rtt, and ttle here in your response pandas dataframe. An example is commented out below for vars
-
-        #print(delay)
-        time.sleep(1)  # wait one second
-    
+    response = pd.DataFrame(columns=['bytes', 'rtt', 'ttl'])
     packet_lost = 0
     packet_recv = 0
-    #fill in start. UPDATE THE QUESTION MARKS
-    for index, row in response.iterrows():
-        if row['rtt'] == 0: #access your response df to determine if you received a packet or not
-            packet_lost = packet_lost + 1
+
+    for i in range(0, 4):
+        result = doOnePing(dest, timeout)
+        #print(f"Result from doOnePing: {result}")  # Add this line
+
+        if len(result) == 2:
+            delay, statistics = result
         else:
-            packet_recv = packet_recv + 1
+            print(f"{result}")
+            continue
 
-    print("\n--- {} ping statistics ---".format(host, dest))
-    print("4 packet transmitted, {} packets recieved, {:.1f}% packet loss".format(packet_recv, packet_lost,
-                                                                              (packet_lost / 4) * 100))
-    #fill in end
+        if statistics:
+            response = response.append(statistics, ignore_index=True)
+        else:
+            response = response.append({'bytes': 0, 'rtt': 0, 'ttl': 0}, ignore_index=True)
+        print(delay)
+        time.sleep(1)
 
-    #You should have the values of delay for each ping here structured in a pandas dataframe; 
-    #fill in calculation for packet_min, packet_avg, packet_max, and stdev
-    vars = pd.DataFrame(columns=['min', 'avg', 'max', 'stddev'])
-    vars = vars.append({'min':str(round(response['rtt'].min() * 1000, 2)), 'avg':str(round(response['rtt'].mean() * 1000, 2)),'max':str(round(response['rtt'].max() * 1000, 2)), 'stddev':str(round(response['rtt'].std() * 1000,2))}, ignore_index=True)
-    print (vars) #make sure your vars data you are returning resembles acceptance criteria
+
+    for index, row in response.iterrows():
+        if row['rtt'] == 0:
+            packet_lost += 1
+        else:
+            packet_recv += 1
+
+    print(f"\n--- {host} ping statistics ---")
+    if len(response) > 0:
+        print(
+            f"{len(response)} packets transmitted, {packet_recv} packets received, {packet_lost / len(response) * 100.0:.1f}% packet loss")
+    else:
+        print("4 packets transmitted, 0 packets received, 100% packet loss")
+
+
+    if packet_recv == 0:
+        vars = pd.DataFrame({"min": [0], "avg": [0.0], "max": [0], "stddev": [0.0]})
+    else:
+        vars = pd.DataFrame({"min": [round(response['rtt'].min(), 2)],
+                             "avg": [round(response['rtt'].mean(), 2)],
+                             "max": [round(response['rtt'].max(), 2)],
+                             "stddev": [round(response['rtt'].std(), 2)]})
+    print(vars)
     return vars
+
 
 #this part of the code checks if we are running this file directly and starts the process is we are
 if __name__ == '__main__':
     #ping("127.0.0.1")
     ping("google.com")
+    ping("nyu.edu")
+    ping("yahoo.com")
 
 
